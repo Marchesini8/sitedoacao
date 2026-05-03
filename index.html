@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cantinho das Borboletas - Doações</title>
+    <link rel="icon" type="image/png" href="/assets/logo-cantinho.png">
+    <link rel="apple-touch-icon" href="/assets/logo-cantinho.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -29,14 +31,9 @@
         }
 
         .brand-mark {
-            width: 34px;
-            height: 34px;
-            display: grid;
-            place-items: center;
-            border-radius: 8px;
-            background: var(--pink);
-            color: #fff;
-            font-weight: 900;
+            width: 42px;
+            height: 42px;
+            object-fit: contain;
         }
 
         .hero-bg {
@@ -236,7 +233,7 @@
     <header class="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
         <div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 md:px-8">
             <a href="#top" class="flex items-center gap-2 text-[12px] font-black uppercase leading-none text-[var(--pink)]">
-                <span class="brand-mark">B</span>
+                <img class="brand-mark" src="/assets/logo-cantinho.png" alt="Cantinho das Borboletas">
                 <span class="hidden sm:block">Cantinho<br>das Borboletas</span>
             </a>
             <button onclick="openDonation()" class="rounded-md bg-[var(--pink)] px-6 py-2 text-sm font-black text-white transition hover:bg-[var(--pink-dark)]">
@@ -563,7 +560,7 @@
                 `;
             }).join("");
         }
-        const DEFAULT_STATS = { raised: 0, goal: 300000, percentage: 0 };
+        const DEFAULT_STATS = { raised: 29863, goal: 300000, percentage: 10 };
         let selectedAmount = 50;
 
         function formatCurrency(value) {
@@ -665,12 +662,12 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         items: [{ id: 1, title: "Doação Cantinho das Borboletas", price: amount, qty: 1, message }],
-                        customer: { name, cpf: "00000000000", email },
+                        customer: { name, email },
                         delivery: { cep: "00000-000", address: "Doação online", number: "0", city: "Online", complement: message }
                     })
                 });
 
-                const data = await response.json();
+                const data = await response.json().catch(() => ({}));
                 if (!response.ok) throw new Error(data.error || "Falha ao gerar pagamento");
 
                 const pixCode = data.pix_code || data.pix_qr_code || data.transaction_hash;
@@ -679,10 +676,11 @@
                 document.getElementById("pix-code").value = pixCode;
                 renderPixQr(data.pix_base64, pixCode);
                 document.getElementById("pix-panel").classList.remove("hidden");
+                scrollToPixPanel();
                 if (data.stats) updateStatsUI(data.stats);
             } catch (error) {
                 console.error(error);
-                alert("Erro ao gerar PIX. Verifique os dados e tente novamente.");
+                alert(error.message || "Erro ao gerar PIX. Verifique os dados e tente novamente.");
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = 'Quero Ajudar <i data-lucide="hand-heart" class="h-4 w-4"></i>';
@@ -699,6 +697,24 @@
 
             image.classList.remove("hidden");
             placeholder.classList.add("hidden");
+        }
+
+        function scrollToPixPanel() {
+            const panel = document.getElementById("pix-panel");
+            const codeInput = document.getElementById("pix-code");
+            const scrollContainer = document.querySelector(".donation-panel");
+
+            if (!panel || !scrollContainer) return;
+
+            requestAnimationFrame(() => {
+                const targetTop = Math.max(0, panel.offsetTop - 14);
+                scrollContainer.scrollTo({ top: targetTop, behavior: "smooth" });
+
+                setTimeout(() => {
+                    codeInput.focus({ preventScroll: true });
+                    codeInput.select();
+                }, 380);
+            });
         }
 
         function copyPix() {

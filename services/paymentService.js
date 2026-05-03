@@ -3,7 +3,18 @@ const axios = require('axios');
 const DEFAULT_DONATION_AMOUNT = Number(process.env.DONATION_AMOUNT || 49.9);
 const DONATION_ITEM_TITLE = 'Doacao Cantinho das Borboletas';
 
-exports.createPixPayment = async ({ items, customer, delivery }) => {
+function getConfiguredValue(value) {
+  if (!value) return '';
+  const normalized = String(value).trim();
+  const lower = normalized.toLowerCase();
+  return lower.includes('cole_') || lower.includes('prod123') ? '' : normalized;
+}
+
+function pickFirst(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== '') || null;
+}
+
+exports.createPixPayment = async ({ items, customer = {}, delivery = {} }) => {
   const requestedAmount = Number(items?.[0]?.price || items?.[0]?.amount || DEFAULT_DONATION_AMOUNT);
   const donationAmount = Number.isFinite(requestedAmount) && requestedAmount > 0
     ? requestedAmount
@@ -11,11 +22,10 @@ exports.createPixPayment = async ({ items, customer, delivery }) => {
   const totalInCents = Math.round(donationAmount * 100);
   const pixEndpoint = process.env.PAYMENT_PIX_ENDPOINT || '/payments';
   const offerHash = process.env.IRONPAY_OFFER_HASH;
-  const productHash = process.env.IRONPAY_PRODUCT_HASH;
+  const productHash = getConfiguredValue(process.env.IRONPAY_PRODUCT_HASH);
   const postbackUrl = process.env.IRONPAY_POSTBACK_URL;
   const expireInDays = Number(process.env.IRONPAY_EXPIRE_IN_DAYS || 1);
   const cart = [{
-    product_hash: productHash,
     title: DONATION_ITEM_TITLE,
     cover: null,
     price: totalInCents,
@@ -23,6 +33,10 @@ exports.createPixPayment = async ({ items, customer, delivery }) => {
     operation_type: 1,
     tangible: false,
   }];
+
+  if (productHash) {
+    cart[0].product_hash = productHash;
+  }
 
   if (!process.env.PAYMENT_API_URL || !process.env.PAYMENT_API_KEY) {
     const error = new Error('PAYMENT_API_URL ou PAYMENT_API_KEY nao configurado no .env');
@@ -32,12 +46,6 @@ exports.createPixPayment = async ({ items, customer, delivery }) => {
 
   if (!offerHash) {
     const error = new Error('IRONPAY_OFFER_HASH nao configurado no .env');
-    error.statusCode = 500;
-    throw error;
-  }
-
-  if (!productHash) {
-    const error = new Error('IRONPAY_PRODUCT_HASH nao configurado no .env');
     error.statusCode = 500;
     throw error;
   }
@@ -57,7 +65,7 @@ exports.createPixPayment = async ({ items, customer, delivery }) => {
           name: customer.name,
           email: customer.email,
           phone_number: customer.phone_number || customer.phone || process.env.DEFAULT_PHONE_NUMBER || '',
-          document: customer.document || customer.cpf || '',
+          document: customer.document || customer.cpf || process.env.DEFAULT_CUSTOMER_DOCUMENT || '',
           street_name: customer.street_name || delivery.address || '',
           number: customer.number || delivery.number || '',
           complement: customer.complement || delivery.complement || '',
@@ -87,12 +95,23 @@ exports.createPixPayment = async ({ items, customer, delivery }) => {
       }
     );
 
+    const payload = response.data?.data || response.data || {};
+    const pix = payload.pix || payload.payment?.pix || {};
     const pixCode =
-      response.data.pix_code ||
-      response.data.pixCode ||
-      response.data.pix?.pix_qr_code ||
-      response.data.pix_qr_code ||
-      null;
+      pickFirst(
+        payload.pix_code,
+        payload.pixCode,
+        payload.pix_qr_code,
+        payload.qr_code,
+        payload.qrCode,
+        payload.emv,
+        payload.copy_paste,
+        pix.pix_qr_code,
+        pix.qr_code,
+        pix.qrCode,
+        pix.emv,
+        pix.copy_paste
+      );
 
     if (!pixCode) {
       const invalidResponseError = new Error(
@@ -104,17 +123,19 @@ exports.createPixPayment = async ({ items, customer, delivery }) => {
 
     return {
       pix_code: pixCode,
-      pix_base64:
-        response.data.qr_code ||
-        response.data.pix_base64 ||
-        response.data.qrCode ||
-        response.data.pix?.qr_code_base64 ||
-        null,
+      pix_base64: pickFirst(
+        payload.pix_base64,
+        payload.qr_code_base64,
+        payload.qrCodeBase64,
+        pix.pix_base64,
+        pix.qr_code_base64,
+        pix.qrCodeBase64
+      ),
       charged_total: donationAmount,
       product_total: 0,
       shipping_total: donationAmount,
       source: 'ironpay',
-      raw: response.data,
+      raw: payload,
     };
   } catch (error) {
     const providerError = error.response?.data || error.message;
