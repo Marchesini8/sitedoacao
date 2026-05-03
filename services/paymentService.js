@@ -3,13 +3,6 @@ const axios = require('axios');
 const DEFAULT_DONATION_AMOUNT = Number(process.env.DONATION_AMOUNT || 49.9);
 const DONATION_ITEM_TITLE = 'Doacao Cantinho das Borboletas';
 
-function getConfiguredValue(value) {
-  if (!value) return '';
-  const normalized = String(value).trim();
-  const lower = normalized.toLowerCase();
-  return lower.includes('cole_') || lower.includes('prod123') ? '' : normalized;
-}
-
 function pickFirst(...values) {
   return values.find((value) => value !== undefined && value !== null && value !== '') || null;
 }
@@ -22,10 +15,11 @@ exports.createPixPayment = async ({ items, customer = {}, delivery = {} }) => {
   const totalInCents = Math.round(donationAmount * 100);
   const pixEndpoint = process.env.PAYMENT_PIX_ENDPOINT || '/payments';
   const offerHash = process.env.IRONPAY_OFFER_HASH;
-  const productHash = getConfiguredValue(process.env.IRONPAY_PRODUCT_HASH);
+  const productHash = String(process.env.IRONPAY_PRODUCT_HASH || '').trim();
   const postbackUrl = process.env.IRONPAY_POSTBACK_URL;
   const expireInDays = Number(process.env.IRONPAY_EXPIRE_IN_DAYS || 1);
   const cart = [{
+    product_hash: productHash,
     title: DONATION_ITEM_TITLE,
     cover: null,
     price: totalInCents,
@@ -34,12 +28,14 @@ exports.createPixPayment = async ({ items, customer = {}, delivery = {} }) => {
     tangible: false,
   }];
 
-  if (productHash) {
-    cart[0].product_hash = productHash;
-  }
-
   if (!process.env.PAYMENT_API_URL || !process.env.PAYMENT_API_KEY) {
     const error = new Error('PAYMENT_API_URL ou PAYMENT_API_KEY nao configurado no .env');
+    error.statusCode = 500;
+    throw error;
+  }
+
+  if (!productHash) {
+    const error = new Error('IRONPAY_PRODUCT_HASH nao configurado no .env');
     error.statusCode = 500;
     throw error;
   }

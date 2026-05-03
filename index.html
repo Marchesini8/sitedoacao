@@ -636,6 +636,7 @@
 
                         <label class="mt-4 block text-xs font-bold text-gray-700">Valor personalizado</label>
                         <input id="custom-amount" class="field mt-2" inputmode="decimal" placeholder="R$ 50">
+                        <p id="custom-amount-preview" class="mt-2 hidden text-xs font-black text-[var(--pink)]"></p>
 
                         <label class="mt-4 block text-xs font-bold text-gray-700">Seu nome</label>
                         <input id="cust-name" class="field mt-2" autocomplete="name" placeholder="Digite seu nome">
@@ -726,6 +727,24 @@
                 .replace(/\./g, "")
                 .replace(",", ".");
             return Number(normalized);
+        }
+
+        function updateCustomAmountPreview() {
+            const preview = document.getElementById("custom-amount-preview");
+            const amount = parseMoney(getFieldValue("custom-amount"));
+
+            if (!preview) return;
+
+            if (!Number.isFinite(amount) || amount <= 0) {
+                preview.classList.add("hidden");
+                preview.innerText = "";
+                updatePixSummary(selectedAmount);
+                return;
+            }
+
+            preview.innerText = `Valor personalizado: ${formatCurrency(amount)}`;
+            preview.classList.remove("hidden");
+            updatePixSummary(amount);
         }
 
         function updateStatsUI(stats = DEFAULT_STATS) {
@@ -897,13 +916,14 @@
                 document.querySelectorAll(".amount-btn").forEach((item) => item.classList.remove("active"));
                 button.classList.add("active");
                 document.getElementById("custom-amount").value = "";
+                updateCustomAmountPreview();
                 updatePixSummary(selectedAmount);
             });
         });
 
         document.getElementById("custom-amount").addEventListener("input", () => {
             document.querySelectorAll(".amount-btn").forEach((item) => item.classList.remove("active"));
-            updatePixSummary();
+            updateCustomAmountPreview();
         });
 
         document.getElementById("donation-form").addEventListener("submit", (event) => {
